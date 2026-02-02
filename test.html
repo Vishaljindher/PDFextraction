@@ -1,0 +1,28 @@
+<!DOCTYPE html>
+<html>
+<body>
+  <h2>PDF / Image Question Extractor</h2>
+
+  <input type="file" id="file" />
+  <button onclick="send()">Extract</button>
+
+  <pre id="output"></pre>
+
+  <script>
+    async function send() {
+      const file = document.getElementById("file").files[0];
+      const fd = new FormData();
+      fd.append("file", file);
+
+      const res = await fetch("http://127.0.0.1:5000/extract-questions", {
+        method: "POST",
+        body: fd
+      });
+
+      const data = await res.json();
+      document.getElementById("output").textContent =
+        JSON.stringify(data, null, 2);
+    }
+  </script>
+</body>
+</html>

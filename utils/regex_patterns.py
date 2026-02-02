@@ -1,5 +1,15 @@
 # utils/regex_patterns.py
 
-QUESTION_NUMBER = r"(Q\d+[\.\)]|\d+[\.\)])"
-MCQ_OPTION = r"[A-D][\)\.]"
-ANSWER = r"Answer\s*:\s*[A-D]|True|False"
+# Question numbering like:
+# Q1. , Q2) , 1. , 2)
+QUESTION_NUMBER = r"(?:Q\s*\d+|\d+)[\.\)]"
+
+# MCQ options like:
+# A) , B. , a) , e.
+MCQ_OPTION = r"[A-Ea-e][\)\.]"
+
+# Answer patterns like:
+# Answer: A
+# ANSWER : TRUE
+# Answer: false
+ANSWER = r"Answer\s*:\s*(?:[A-Ea-e]|True|False)"

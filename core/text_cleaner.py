@@ -3,7 +3,8 @@ import re
 
 def clean_text(text: str) -> str:
     """
-    Clean raw extracted text for question parsing.
+    Clean raw extracted text for question parsing
+    (MCQ / Exam friendly)
     """
 
     if not text or not isinstance(text, str):
@@ -13,12 +14,12 @@ def clean_text(text: str) -> str:
     text = _remove_headers_footers(text)
     text = _remove_page_numbers(text)
     text = _remove_noise(text)
-    text = _fix_spacing(text)
+    text = _fix_spacing_safe(text)
 
     return text.strip()
 
 
-# ------------------ Cleaning Steps ------------------ #
+# ================= CLEANING STEPS ================= #
 
 def _normalize_text(text: str) -> str:
     """
@@ -31,7 +32,7 @@ def _normalize_text(text: str) -> str:
 
 def _remove_headers_footers(text: str) -> str:
     """
-    Remove repeated headers/footers (simple heuristic)
+    Remove obvious headers / footers without killing content
     """
     lines = text.split("\n")
     cleaned = []
@@ -39,8 +40,17 @@ def _remove_headers_footers(text: str) -> str:
     for line in lines:
         line_strip = line.strip()
 
-        # skip very short uppercase lines (headers)
-        if line_strip.isupper() and len(line_strip) < 40:
+        # skip empty
+        if not line_strip:
+            cleaned.append(line)
+            continue
+
+        # skip very short ALL CAPS lines with NO digits (true headers)
+        if (
+            line_strip.isupper()
+            and len(line_strip) < 30
+            and not re.search(r"\d", line_strip)
+        ):
             continue
 
         cleaned.append(line)
@@ -63,40 +73,38 @@ def _remove_page_numbers(text: str) -> str:
     cleaned = []
 
     for line in lines:
-        skip = False
-        for pattern in patterns:
-            if re.match(pattern, line.strip().lower()):
-                skip = True
-                break
-
-        if not skip:
-            cleaned.append(line)
+        if any(re.match(p, line.strip().lower()) for p in patterns):
+            continue
+        cleaned.append(line)
 
     return "\n".join(cleaned)
 
 
 def _remove_noise(text: str) -> str:
     """
-    Remove OCR / extraction noise
+    Remove OCR / extraction noise (SAFE)
     """
-    # weird unicode chars
+    # remove weird unicode chars only
     text = re.sub(r"[�•►■◆]", " ", text)
 
-    # multiple dots or hyphens
-    text = re.sub(r"\.{3,}", " ", text)
-    text = re.sub(r"-{3,}", " ", text)
+    # remove long dot / hyphen runs ONLY
+    text = re.sub(r"\.{4,}", " ", text)
+    text = re.sub(r"-{4,}", " ", text)
 
     return text
 
 
-def _fix_spacing(text: str) -> str:
+def _fix_spacing_safe(text: str) -> str:
     """
-    Fix spacing issues
+    Fix spacing WITHOUT destroying MCQ structure
     """
-    # multiple spaces
-    text = re.sub(r"[ ]{2,}", " ", text)
+    # collapse multiple spaces (but keep newlines)
+    text = re.sub(r"[ \t]{2,}", " ", text)
 
-    # more than 2 line breaks → 2 max
+    # normalize excessive newlines
     text = re.sub(r"\n{3,}", "\n\n", text)
+
+    # ensure space after option markers
+    text = re.sub(r"([A-D][\)\.])([^\s])", r"\1 \2", text)
 
     return text

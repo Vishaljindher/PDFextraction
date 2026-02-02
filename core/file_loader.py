@@ -1,4 +1,5 @@
 import os
+import re
 from PyPDF2 import PdfReader
 from docx import Document
 import pandas as pd
@@ -6,7 +7,9 @@ import pandas as pd
 from ocr.image_reader import read_image
 
 
-SUPPORTED_EXTENSIONS = [".pdf", ".docx", ".xlsx", ".txt", ".png", ".jpg", ".jpeg"]
+SUPPORTED_EXTENSIONS = [
+    ".pdf", ".docx", ".xlsx", ".txt", ".png", ".jpg", ".jpeg"
+]
 
 
 def load_file(file_path: str) -> str:
@@ -41,26 +44,49 @@ def load_file(file_path: str) -> str:
     return ""
 
 
-# ------------------ Extractors ------------------ #
+# ================= EXTRACTORS ================= #
 
 def _extract_pdf(path: str) -> str:
-    text = []
+    """
+    Extract text from PDF and make MCQ structure parser-friendly
+    """
+    text_blocks = []
     reader = PdfReader(path)
 
     for page in reader.pages:
         page_text = page.extract_text()
-        if page_text:
-            text.append(page_text)
+        if not page_text:
+            continue
 
-    return "\n".join(text)
+        # Force newlines before MCQ options & Answer
+        page_text = _normalize_mcq_structure(page_text)
+        text_blocks.append(page_text)
+
+    return "\n".join(text_blocks)
 
 
 def _extract_docx(path: str) -> str:
+    """
+    Extract text from DOCX while preserving MCQ structure
+    """
     doc = Document(path)
-    return "\n".join([para.text for para in doc.paragraphs])
+    lines = []
+
+    for para in doc.paragraphs:
+        text = para.text.strip()
+        if not text:
+            continue
+
+        text = _normalize_mcq_structure(text)
+        lines.append(text)
+
+    return "\n".join(lines)
 
 
 def _extract_excel(path: str) -> str:
+    """
+    Extract text from Excel (basic support)
+    """
     df = pd.read_excel(path, sheet_name=None)
     text = []
 
@@ -76,4 +102,24 @@ def _extract_txt(path: str) -> str:
 
 
 def _extract_image(path: str) -> str:
-    return read_image(path)
+    """
+    OCR image text and normalize MCQ structure
+    """
+    text = read_image(path)
+    return _normalize_mcq_structure(text)
+
+
+# ================= HELPERS ================= #
+
+def _normalize_mcq_structure(text: str) -> str:
+    """
+    Make MCQ options & answers appear on separate lines
+    """
+
+    # Newline before options A) B) C) D)
+    text = re.sub(r"([ \t])([A-D][\)\.])", r"\n\2", text)
+
+    # Newline before Answer:
+    text = re.sub(r"(Answer\s*:)", r"\n\1", text, flags=re.I)
+
+    return text

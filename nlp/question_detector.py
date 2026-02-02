@@ -2,33 +2,31 @@ import re
 
 QUESTION_WORDS = [
     "what", "why", "how", "when", "where", "who", "whom", "which",
-    "define", "explain", "describe", "discuss", "write", "differentiate",
-    "compare", "list", "state", "give reason", "short note",
-    "kya", "kyon", "kaise"   # Hinglish support
+    "define", "explain", "describe", "discuss", "write",
+    "differentiate", "compare", "list", "state", "give reason",
+    "short note",
+    "kya", "kyon", "kaise"
 ]
 
 
 def detect_questions(text: str):
     """
-    Detects question blocks from OCR text.
-    Works well for MCQ, True/False, Short Answer papers.
+    Detect question blocks WITHOUT breaking MCQs
     """
 
     if not text or not isinstance(text, str):
         return []
 
-    # -------- Normalize OCR noise -------- #
     text = _normalize_text(text)
-
     lines = [l.strip() for l in text.split("\n") if l.strip()]
-    questions = []
 
+    questions = []
     current_q = []
 
     for line in lines:
         if is_question_start(line):
             if current_q:
-                questions.append(" ".join(current_q))
+                questions.append("\n".join(current_q))
                 current_q = []
             current_q.append(line)
         else:
@@ -36,41 +34,45 @@ def detect_questions(text: str):
                 current_q.append(line)
 
     if current_q:
-        questions.append(" ".join(current_q))
+        questions.append("\n".join(current_q))
 
-    # Final cleanup
-    questions = [
-        q.strip() for q in questions
+    return [
+        q for q in questions
         if is_valid_question(q)
     ]
 
-    return questions
 
-
-# ------------------ Core Logic ------------------ #
+# ---------------- CORE LOGIC ---------------- #
 
 def is_question_start(line: str) -> bool:
     """
-    Strong question start detector (OCR tolerant)
+    STRICT question start detector
+    (MCQ options are explicitly blocked)
     """
 
-    if len(line) < 8:
+    if not line or len(line) < 6:
         return False
 
-    # Q1. Q2) QA Ql (OCR mistakes)
-    if re.match(r"^(q[\dla]+[\.\)])", line.lower()):
+    line_strip = line.strip()
+
+    # ❌ MCQ options must NEVER start a question
+    if re.match(r"^[A-Da-d][\)\.]\s+", line_strip):
+        return False
+
+    # Q1. Q2) Ql. (OCR safe)
+    if re.match(r"^(q[\d]+[\.\)])", line_strip.lower()):
         return True
 
-    # 1. 2) 3.
-    if re.match(r"^\d+[\.\)]", line):
+    # 1. 2)
+    if re.match(r"^\d+[\.\)]\s+", line_strip):
         return True
 
-    # Question mark
-    if "?" in line:
+    # Question mark ONLY if it looks like a sentence
+    if line_strip.endswith("?") and len(line_strip.split()) > 3:
         return True
 
     # Question words
-    if _starts_with_question_word(line):
+    if _starts_with_question_word(line_strip):
         return True
 
     return False
@@ -78,10 +80,10 @@ def is_question_start(line: str) -> bool:
 
 def is_valid_question(text: str) -> bool:
     """
-    Filters garbage OCR lines
+    Filters section headers / instructions
     """
 
-    if len(text) < 20:
+    if len(text) < 15:
         return False
 
     blacklist = [
@@ -90,14 +92,10 @@ def is_valid_question(text: str) -> bool:
     ]
 
     t = text.lower()
-    for b in blacklist:
-        if b in t:
-            return False
-
-    return True
+    return not any(b in t for b in blacklist)
 
 
-# ------------------ Helpers ------------------ #
+# ---------------- HELPERS ---------------- #
 
 def _starts_with_question_word(text: str) -> bool:
     text = text.lower()
@@ -109,28 +107,23 @@ def _starts_with_question_word(text: str) -> bool:
 
 def _normalize_text(text: str) -> str:
     """
-    Fix common OCR mistakes
+    OCR normalization WITHOUT destroying MCQ structure
     """
 
     replacements = {
         "qi.": "q1.",
         "ql.": "q1.",
         "qa": "q4",
-        "0)": "D)",
         "©)": "C)",
         "8)": "B)",
-        "a)": "A)",
-        "b)": "B)",
-        "c)": "C)",
-        "d)": "D)"
+        "0)": "D)"
     }
 
-    text = text.lower()
     for k, v in replacements.items():
         text = text.replace(k, v)
 
-    # Remove excessive spaces
-    text = re.sub(r"\s{2,}", " ", text)
-    text = re.sub(r"\n{2,}", "\n", text)
+    # preserve case, just fix spacing
+    text = re.sub(r"[ \t]{2,}", " ", text)
+    text = re.sub(r"\n{3,}", "\n\n", text)
 
     return text
