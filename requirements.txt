@@ -1,14 +1,13 @@
-fastapi
-uvicorn
-python-multipart
-pydantic
+Flask
+flask-cors
+gunicorn
 
 PyPDF2
 python-docx
 pandas
 openpyxl
 
-opencv-python
+opencv-python-headless
 pytesseract
 Pillow
 
