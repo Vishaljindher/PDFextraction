@@ -1,0 +1,16 @@
+fastapi
+uvicorn
+python-multipart
+pydantic
+
+PyPDF2
+python-docx
+pandas
+openpyxl
+
+opencv-python
+pytesseract
+Pillow
+
+nltk
+scikit-learn
